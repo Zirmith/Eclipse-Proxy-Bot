@@ -55,10 +55,11 @@ async function checkProxyStatus(proxy) {
   }
 }
 
-const fetchInterval = 3600000; // 1 hour
+const fetchInterval = 60000; // 1 minute
 setInterval(fetchAndSaveProxies, fetchInterval);
 
-const checkInterval = 600000; // 10 minutes
+const checkInterval = 2000; // 2 seconds
+
 setInterval(async () => {
   const proxies = await Proxy.findAll();
   for (const proxy of proxies) {
