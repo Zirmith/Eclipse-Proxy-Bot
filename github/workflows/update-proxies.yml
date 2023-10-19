@@ -1,0 +1,24 @@
+name: Update Proxies
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Set your desired schedule
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: 14
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Update proxies
+      run: node ../../server.js # Replace with the name of your script
