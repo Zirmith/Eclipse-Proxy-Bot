@@ -1,12 +1,13 @@
 const express = require('express');
 const axios = require('axios');
-const { Proxy } = require('./database'); // Import the Proxy model
 const app = express();
 const port = process.env.PORT || 3000;
 
 const apiUrl = 'http://pubproxy.com/api/proxy';
 
 let nextStatusCheck = 0; // Initialize countdown timer
+
+const proxiesMap = new Map();
 
 function fetchAndSaveProxies() {
   axios.get(apiUrl)
@@ -15,20 +16,16 @@ function fetchAndSaveProxies() {
         const proxies = response.data.data;
         if (proxies.length > 0) {
           for (const proxy of proxies) {
-            // Check if the proxy already exists in the database
-            const existingProxy = await Proxy.findOne({ where: { ip: proxy.ip, port: proxy.port } });
-
-            if (existingProxy) {
-              // If it exists, update the lastUpdated timestamp
-              await existingProxy.update({ lastUpdated: new Date() });
-            } else {
-              // If it doesn't exist, create a new record
-              await Proxy.create({
+            const key = `${proxy.protocol}://${proxy.ip}:${proxy.port}`;
+            if (!proxiesMap.has(key)) {
+              // If it doesn't exist, add to the map
+              proxiesMap.set(key, {
                 protocol: proxy.protocol,
                 ip: proxy.ip,
                 port: proxy.port,
                 country: proxy.country,
                 lastUpdated: new Date(),
+                status: 'Unknown',
               });
             }
           }
@@ -56,16 +53,16 @@ async function checkProxyStatus(proxy) {
 }
 
 const fetchInterval = 60000; // 1 minute
-fetchAndSaveProxies()
+fetchAndSaveProxies();
 setInterval(fetchAndSaveProxies, fetchInterval);
 
 const checkInterval = 2000; // 2 seconds
 
 setInterval(async () => {
-  const proxies = await Proxy.findAll();
-  for (const proxy of proxies) {
+  for (const [key, proxy] of proxiesMap) {
     const status = await checkProxyStatus(proxy);
-    await proxy.update({ status });
+    proxy.status = status;
+    proxy.lastUpdated = new Date();
   }
   // Reset the countdown timer after each check
   nextStatusCheck = checkInterval;
@@ -76,13 +73,8 @@ app.get('/countdown', (req, res) => {
   res.json({ timeUntilNextStatusCheck: nextStatusCheck / 1000 }); // Convert to seconds
 });
 
-app.get('/proxies', async (req, res) => {
-  try {
-    const proxies = await Proxy.findAll();
-    res.json(proxies);
-  } catch (error) {
-    res.status(500).json({ message: 'Internal Server Error' });
-  }
+app.get('/proxies', (req, res) => {
+  res.json(Array.from(proxiesMap.values()));
 });
 
 app.listen(port, () => {
