@@ -1,5 +1,6 @@
 const express = require('express');
 const axios = require('axios');
+const rateLimit = require("express-rate-limit");
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -9,7 +10,14 @@ let nextStatusCheck = 0; // Initialize countdown timer
 
 const proxiesMap = new Map();
 
-function fetchAndSaveProxies() {
+// Define the rate limit settings for the API requests
+const apiRateLimiter = rateLimit({
+  windowMs: 1000, // 1 second
+  max: 1, // 1 request per second for the API
+});
+
+// Function to fetch and save proxies with rate limiting
+function fetchAndSaveProxiesWithRateLimit() {
   axios.get(apiUrl)
     .then(async (response) => {
       if (response.data && response.data.data) {
@@ -36,6 +44,9 @@ function fetchAndSaveProxies() {
       console.error('An error occurred:', error.message);
     });
 }
+
+// Apply rate limiting to the fetchAndSaveProxiesWithRateLimit function
+const fetchAndSaveProxies = apiRateLimiter(fetchAndSaveProxiesWithRateLimit);
 
 async function checkProxyStatus(proxy) {
   try {
