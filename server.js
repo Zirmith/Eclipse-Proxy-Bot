@@ -56,6 +56,7 @@ async function checkProxyStatus(proxy) {
 }
 
 const fetchInterval = 60000; // 1 minute
+fetchAndSaveProxies()
 setInterval(fetchAndSaveProxies, fetchInterval);
 
 const checkInterval = 2000; // 2 seconds
