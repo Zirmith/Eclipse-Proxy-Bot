@@ -1,6 +1,5 @@
 const express = require('express');
 const axios = require('axios');
-const rateLimit = require("express-rate-limit");
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -10,43 +9,39 @@ let nextStatusCheck = 0; // Initialize countdown timer
 
 const proxiesMap = new Map();
 
-// Define the rate limit settings for the API requests
-const apiRateLimiter = rateLimit({
-  windowMs: 1000, // 1 second
-  max: 1, // 1 request per second for the API
-});
+// Function to fetch and save proxies with a delay
+async function fetchAndSaveProxiesWithDelay() {
+  try {
+    const response = await axios.get(apiUrl);
 
-// Function to fetch and save proxies with rate limiting
-function fetchAndSaveProxiesWithRateLimit() {
-  axios.get(apiUrl)
-    .then(async (response) => {
-      if (response.data && response.data.data) {
-        const proxies = response.data.data;
-        if (proxies.length > 0) {
-          for (const proxy of proxies) {
-            const key = `${proxy.protocol}://${proxy.ip}:${proxy.port}`;
-            if (!proxiesMap.has(key)) {
-              // If it doesn't exist, add to the map
-              proxiesMap.set(key, {
-                protocol: proxy.protocol,
-                ip: proxy.ip,
-                port: proxy.port,
-                country: proxy.country,
-                lastUpdated: new Date(),
-                status: 'Unknown',
-              });
-            }
-          }
+    if (response.data && response.data.data) {
+      const proxies = response.data.data;
+      for (const proxy of proxies) {
+        const key = `${proxy.protocol}://${proxy.ip}:${proxy.port}`;
+        if (!proxiesMap.has(key)) {
+          // If it doesn't exist, add to the map
+          proxiesMap.set(key, {
+            protocol: proxy.protocol,
+            ip: proxy.ip,
+            port: proxy.port,
+            country: proxy.country,
+            lastUpdated: new Date(),
+            status: 'Unknown',
+          });
         }
       }
-    })
-    .catch((error) => {
-      console.error('An error occurred:', error.message);
-    });
+    }
+  } catch (error) {
+    console.error('An error occurred while fetching proxies:', error.message);
+  }
 }
 
-// Apply rate limiting to the fetchAndSaveProxiesWithRateLimit function
-const fetchAndSaveProxies = apiRateLimiter(fetchAndSaveProxiesWithRateLimit);
+// Apply a delay between requests
+const requestDelay = 1000; // 1 second
+const fetchAndSaveProxies = async () => {
+  await fetchAndSaveProxiesWithDelay();
+  setTimeout(fetchAndSaveProxies, requestDelay);
+};
 
 async function checkProxyStatus(proxy) {
   try {
@@ -85,7 +80,13 @@ app.get('/countdown', (req, res) => {
 });
 
 app.get('/proxies', (req, res) => {
-  res.json(Array.from(proxiesMap.values()));
+  // Sort proxies by type (protocol) and send them as JSON
+  const sortedProxies = Array.from(proxiesMap.values()).reduce((acc, proxy) => {
+    acc[proxy.protocol] = acc[proxy.protocol] || [];
+    acc[proxy.protocol].push(proxy);
+    return acc;
+  }, {});
+  res.json(sortedProxies);
 });
 
 app.listen(port, () => {
