@@ -6,6 +6,8 @@ const port = process.env.PORT || 3000;
 
 const apiUrl = 'http://pubproxy.com/api/proxy';
 
+let nextStatusCheck = 0; // Initialize countdown timer
+
 function fetchAndSaveProxies() {
   axios.get(apiUrl)
     .then(async (response) => {
@@ -38,9 +40,39 @@ function fetchAndSaveProxies() {
     });
 }
 
+async function checkProxyStatus(proxy) {
+  try {
+    const response = await axios.get('https://example.com', {
+      proxy: {
+        host: proxy.ip,
+        port: proxy.port,
+        protocol: proxy.protocol,
+      },
+    });
+    return response.status === 200 ? 'Working' : 'Not Working';
+  } catch (error) {
+    return 'Not Working';
+  }
+}
+
 const fetchInterval = 3600000; // 1 hour
-fetchAndSaveProxies();
 setInterval(fetchAndSaveProxies, fetchInterval);
+
+const checkInterval = 600000; // 10 minutes
+setInterval(async () => {
+  const proxies = await Proxy.findAll();
+  for (const proxy of proxies) {
+    const status = await checkProxyStatus(proxy);
+    await proxy.update({ status });
+  }
+  // Reset the countdown timer after each check
+  nextStatusCheck = checkInterval;
+}, checkInterval);
+
+// Countdown route
+app.get('/countdown', (req, res) => {
+  res.json({ timeUntilNextStatusCheck: nextStatusCheck / 1000 }); // Convert to seconds
+});
 
 app.get('/proxies', async (req, res) => {
   try {
@@ -54,4 +86,10 @@ app.get('/proxies', async (req, res) => {
 app.listen(port, () => {
   console.log(`Proxy service is running on port ${port}`);
   console.log(`Proxies will be fetched and saved every ${fetchInterval / 1000} seconds.`);
+  console.log(`Proxy status will be checked every ${checkInterval / 1000} seconds.`);
+
+  // Countdown timer for the next status check
+  setInterval(() => {
+    nextStatusCheck -= 1000; // Decrease by 1 second
+  }, 1000);
 });
